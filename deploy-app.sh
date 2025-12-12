@@ -60,11 +60,10 @@ Wants=mysql.service
 Type=simple
 User=$APP_USER
 WorkingDirectory=$APP_HOME
-ExecStart=/usr/bin/java -jar $APP_HOME/$APP_NAME.jar \\
-    --spring.datasource.url=jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT}/${MYSQL_DB}?useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true \\
-    --spring.datasource.username=${MYSQL_USER} \\
-    --spring.datasource.password=${MYSQL_PASSWORD} \\
-    --server.port=${APP_PORT}
+ExecStart=/bin/sh -c 'MW_API_KEY=your-api-key /usr/bin/java -javaagent:middleware-javaagent-1.3.0.jar \\
+    -Dotel.service.name="java-springboot-service" \\
+    -Dotel.resource.attributes=project.name="java-springboot-project" \\
+    -jar $APP_HOME/$APP_NAME.jar'
 Restart=on-failure
 RestartSec=10
 StandardOutput=journal
