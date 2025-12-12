@@ -19,14 +19,35 @@ echo "=========================================="
 echo "Bank Application Deployment Setup"
 echo "=========================================="
 
-# 1. Install Java 17 if not present
-if ! command -v java &> /dev/null; then
+# 1. Ensure Java 17 is installed and set as default
+echo "Checking Java version..."
+JAVA_OK=false
+if command -v java >/dev/null 2>&1; then
+    if java -version 2>&1 | grep -q 'version \"17\|openjdk version \"17'; then
+        JAVA_OK=true
+    fi
+fi
+if [ "$JAVA_OK" = false ]; then
     echo "Installing Java 17..."
     sudo apt update
     sudo apt install -y openjdk-17-jdk
+    # try to set alternatives to the installed JDK
+    if [ -d /usr/lib/jvm/java-17-openjdk-amd64 ]; then
+        sudo update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java || true
+        sudo update-alternatives --set javac /usr/lib/jvm/java-17-openjdk-amd64/bin/javac || true
+    fi
 else
     echo "Java is already installed: $(java -version 2>&1 | head -n 1)"
 fi
+
+# Export JAVA_HOME and ensure it's on PATH so Maven uses Java 17
+if [ -d /usr/lib/jvm/java-17-openjdk-amd64 ]; then
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+else
+    export JAVA_HOME=$(dirname $(dirname $(readlink -f $(which java))))
+fi
+export PATH=$JAVA_HOME/bin:$PATH
+echo "Using Java: $($JAVA_HOME/bin/java -version 2>&1 | head -n 1)"
 
 # 2. Create application user
 if ! id "$APP_USER" &>/dev/null; then
@@ -40,7 +61,7 @@ sudo mkdir -p "$APP_HOME"
 sudo chown -R "$APP_USER:$APP_GROUP" "$APP_HOME"
 
 # 4. Build the application
-echo "Building application with Maven..."
+echo "Building application with Maven (using JAVA_HOME=$JAVA_HOME)..."
 mvn clean package -DskipTests
 
 # 5. Copy JAR to application directory
