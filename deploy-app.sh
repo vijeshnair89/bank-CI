@@ -9,6 +9,10 @@ APP_USER="bankapp"
 APP_GROUP="bankapp"
 APP_HOME="/opt/bankapp"
 APP_PORT=8080
+AGENT_JAR_NAME="middleware-javaagent-1.3.0.jar"
+# Optional: provide a URL to download the agent if it's not present in the repo
+# e.g. AGENT_JAR_URL="https://example.com/path/to/middleware-javaagent-1.3.0.jar"
+AGENT_JAR_URL=""
 MYSQL_HOST="localhost"  # Change to MySQL server IP if on different VM
 MYSQL_PORT=3306
 MYSQL_DB="bankappdb"
@@ -69,6 +73,27 @@ echo "Deploying application JAR..."
 sudo cp target/*.jar "$APP_HOME/$APP_NAME.jar"
 sudo chown "$APP_USER:$APP_GROUP" "$APP_HOME/$APP_NAME.jar"
 
+# 5.1 Ensure middleware agent JAR is present in $APP_HOME
+echo "Ensuring middleware agent JAR is present..."
+if [ -f "$APP_HOME/$AGENT_JAR_NAME" ]; then
+    echo "Agent already present at $APP_HOME/$AGENT_JAR_NAME"
+else
+    # If the agent exists in the repository root, copy it
+    if [ -f "$PWD/$AGENT_JAR_NAME" ]; then
+        echo "Copying agent from repository to $APP_HOME"
+        sudo cp "$PWD/$AGENT_JAR_NAME" "$APP_HOME/"
+        sudo chown "$APP_USER:$APP_GROUP" "$APP_HOME/$AGENT_JAR_NAME"
+    elif [ -n "$AGENT_JAR_URL" ]; then
+        echo "Downloading agent from $AGENT_JAR_URL"
+        sudo curl -fSL -o "$APP_HOME/$AGENT_JAR_NAME" "$AGENT_JAR_URL"
+        sudo chown "$APP_USER:$APP_GROUP" "$APP_HOME/$AGENT_JAR_NAME"
+    else
+        echo "ERROR: $AGENT_JAR_NAME not found in repository and AGENT_JAR_URL is not set."
+        echo "Place $AGENT_JAR_NAME in the project root or set AGENT_JAR_URL in deploy-app.sh and re-run."
+        exit 1
+    fi
+fi
+
 # 6. Create systemd service file
 echo "Creating systemd service..."
 sudo tee /etc/systemd/system/${APP_NAME}.service > /dev/null <<EOF
@@ -81,7 +106,7 @@ Wants=mysql.service
 Type=simple
 User=$APP_USER
 WorkingDirectory=$APP_HOME
-ExecStart=/bin/sh -c 'MW_API_KEY=your-api-key /usr/bin/java -javaagent:middleware-javaagent-1.3.0.jar \\
+ExecStart=/bin/sh -c 'MW_API_KEY=your-api-key /usr/bin/java -javaagent:$APP_HOME/$AGENT_JAR_NAME \\
     -Dotel.service.name="java-springboot-service" \\
     -Dotel.resource.attributes=project.name="java-springboot-project" \\
     -jar $APP_HOME/$APP_NAME.jar'
